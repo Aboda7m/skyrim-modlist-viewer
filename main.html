@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Skyrim Modlist & Plugin Viewer</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <style id="main-style">
+    :root {
+      --bg: #f8f9fa;
+      --text: #212529;
+      --muted: #6c757d;
+      --primary: #0d6efd;
+      --primary-dark: #0b5ed7;
+      --red: #dc3545;
+      --red-bg: #f8d7da;
+      --separator-bg: #e2f0d9;
+      --border: #dee2e6;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      padding: 2rem;
+      margin: 0 auto;
+      max-width: 960px;
+    }
+
+    h1, h2 {
+      font-weight: 600;
+      margin-bottom: 1rem;
+    }
+
+    input[type="file"],
+    button {
+      padding: 0.75rem 1rem;
+      font-size: 1rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      margin: 0.5rem 0;
+      transition: all 0.2s ease-in-out;
+    }
+
+    button {
+      background-color: var(--primary);
+      color: white;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: var(--primary-dark);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.5rem 0;
+      background: white;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    th, td {
+      padding: 1rem;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+    }
+
+    th {
+      background-color: #f1f3f5;
+      font-weight: 500;
+      color: #495057;
+    }
+
+    tr:hover:not(.separator):not(.disabled) {
+      background-color: #f9f9f9;
+    }
+
+    .separator {
+      background-color: var(--separator-bg);
+      font-weight: bold;
+      text-align: center;
+      font-style: italic;
+      color: var(--text);
+    }
+
+    .disabled {
+      color: var(--red);
+      background-color: var(--red-bg);
+    }
+
+    label {
+      display: flex;
+      align-items: center;
+      margin-top: 1rem;
+    }
+
+    input[type="checkbox"] {
+      margin-right: 0.5rem;
+    }
+
+    @media (max-width: 600px) {
+      h1 { font-size: 1.5rem; }
+      h2 { font-size: 1.25rem; }
+      input, button { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <h1>Skyrim Modlist & Plugin Viewer</h1>
+
+  <h2>1. Upload Plugin List (.txt)</h2>
+  <input type="file" id="plugin-file" accept=".txt" />
+  <button onclick="loadPluginFile()">Load Plugins</button>
+
+  <table id="plugin-table">
+    <thead>
+      <tr><th>Load Order</th><th>Plugin</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <h2>2. Upload Modlist (.txt)</h2>
+  <input type="file" id="mod-file" accept=".txt" />
+  <button onclick="loadModFile()">Load Modlist</button>
+
+  <label>
+    <input type="checkbox" id="toggle-disabled" checked onchange="toggleDisabledMods()" />
+    Show Disabled Mods
+  </label>
+
+  <table id="mod-table">
+    <thead>
+      <tr><th>#</th><th>Name</th><th>Status</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <button onclick="exportSnapshot()">Save Snapshot as HTML</button>
+
+  <script>
+    function loadPluginFile() {
+      const fileInput = document.getElementById('plugin-file');
+      const file = fileInput.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const content = e.target.result;
+        parsePlugins(content);
+      };
+      reader.readAsText(file);
+    }
+
+    function loadModFile() {
+      const fileInput = document.getElementById('mod-file');
+      const file = fileInput.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const content = e.target.result;
+        parseMods(content);
+      };
+      reader.readAsText(file);
+    }
+
+    function parsePlugins(text) {
+      const lines = text.trim().split("\n");
+      const tbody = document.querySelector("#plugin-table tbody");
+      tbody.innerHTML = "";
+      let count = 0;
+
+      for (const line of lines) {
+        if (line.trim().startsWith("#") || line.trim() === "") continue;
+        const row = document.createElement("tr");
+        row.innerHTML = `<td>${String(count).padStart(3, '0')}</td><td>${line.trim()}</td>`;
+        tbody.appendChild(row);
+        count++;
+      }
+    }
+
+    function parseMods(text) {
+      const lines = text.trim().split("\n");
+      const tbody = document.querySelector("#mod-table tbody");
+      tbody.innerHTML = "";
+
+      for (const line of lines) {
+        const match = line.match(/^"?(.*?)"?,\s*"?([+-])"?,\s*"?(.+?)"?$/);
+        if (!match) continue;
+
+        const [_, order, status, name] = match;
+        const row = document.createElement("tr");
+
+        if (name.toLowerCase().includes("_separator")) {
+          row.className = "separator";
+          row.innerHTML = `<td colspan="3">${name}</td>`;
+        } else {
+          const cls = status === "+" ? "" : "disabled";
+          row.className = cls;
+          row.innerHTML = `
+            <td>${order}</td>
+            <td>${name}</td>
+            <td>${status === "+" ? "Enabled" : "Disabled"}</td>
+          `;
+        }
+        tbody.appendChild(row);
+      }
+
+      toggleDisabledMods();
+    }
+
+    function toggleDisabledMods() {
+      const show = document.getElementById('toggle-disabled').checked;
+      const disabledRows = document.querySelectorAll("#mod-table tbody tr.disabled");
+      disabledRows.forEach(row => {
+        row.style.display = show ? "" : "none";
+      });
+    }
+
+    function exportSnapshot() {
+      const pluginTable = document.getElementById("plugin-table").outerHTML;
+      const modTable = document.getElementById("mod-table").outerHTML;
+      const css = document.getElementById("main-style").innerHTML;
+
+      const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Saved Skyrim Modlist Snapshot</title>
+  <style>${css}</style>
+</head>
+<body>
+  <h1>Skyrim Modlist Snapshot</h1>
+  <h2>Plugin Load Order</h2>
+  ${pluginTable}
+  <h2>Modlist</h2>
+  ${modTable}
+</body>
+</html>`;
+
+      const blob = new Blob([html], { type: "text/html" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "skyrim_modlist_snapshot.html";
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  </script>
+</body>
+</html>
